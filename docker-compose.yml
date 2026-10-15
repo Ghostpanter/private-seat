@@ -1,0 +1,16 @@
+services:
+  private-seat:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8080}
+      PGLITE_DATA_DIR: /data
+    volumes:
+      - private-seat-data:/data
+    restart: unless-stopped
+
+volumes:
+  private-seat-data:
