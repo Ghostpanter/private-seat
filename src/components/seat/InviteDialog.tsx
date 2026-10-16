@@ -111,7 +111,7 @@ export function InviteDialog({
         <Dialog.Content className="rise fixed top-1/2 left-1/2 z-50 max-h-[min(40rem,calc(100dvh-2rem))] w-[min(32rem,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl bg-card p-6 text-ink">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <Dialog.Title className="font-serif text-2xl font-medium tracking-tight">邀请入席</Dialog.Title>
+              <Dialog.Title className="text-xl font-medium">设置</Dialog.Title>
               <Dialog.Description className="mt-2 text-sm text-muted">
                 对方用自己的账号登录。这里只有称呼和今天用了几条，没有对话内容。你也看不见他们写了什么。
               </Dialog.Description>
