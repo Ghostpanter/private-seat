@@ -1,4 +1,5 @@
 import { getSql } from "@/lib/db";
+import { getRequest } from "@tanstack/react-start/server";
 import { DAILY_CAP, GLOBAL_CAP, MAX_INPUT, tokyoDay } from "@/lib/seat/limits";
 import type {
   GuestRow,
@@ -9,6 +10,20 @@ import type {
 } from "@/lib/seat/types";
 
 const ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+function browserViewForRequest(): string | null {
+  if (!process.env.GROK_BROWSER_CDP?.trim()) return null;
+  const pinned = process.env.GROK_BROWSER_VIEW?.trim() ?? "";
+  if (pinned && !/localhost|127\.0\.0\.1/.test(pinned)) return pinned;
+  try {
+    const host = getRequest().headers.get("host") ?? "";
+    const hostname = host.replace(/:\d+$/, "").replace(/^\[|\]$/g, "");
+    if (!hostname) return pinned || null;
+    return `http://${hostname}:6080/vnc.html`;
+  } catch {
+    return pinned || null;
+  }
+}
 
 function asIso(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
@@ -105,7 +120,7 @@ export async function ensureSeat(userId: string): Promise<SeatState> {
     globalCap: GLOBAL_CAP,
     grok,
     browser: Boolean(process.env.GROK_BROWSER_CDP?.trim()),
-    browserView: process.env.GROK_BROWSER_VIEW?.trim() || null,
+    browserView: browserViewForRequest(),
   };
 }
 

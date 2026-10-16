@@ -10,24 +10,18 @@
 
 ```bash
 export BETTER_AUTH_SECRET="$(openssl rand -hex 32)"
-export BETTER_AUTH_URL="http://localhost:8080"
-export XAI_API_KEY="xai-你的密钥"   # 也可以留空，启动后在页面里贴
 
 docker compose up --build
 ```
 
-浏览器打开 `BETTER_AUTH_URL` 对应的地址。用邮箱注册。
+用路由器的局域网地址打开，不要用 localhost。例如 `http://192.168.5.1:8080`。登录跳转会留在这个地址上。
 
-容器里还有一个浏览器，专门开着 Grok 网页。席主用宿主机的 `6080` 端口打开它（画面密码默认 `seat-browser`，可用 `VNC_PASSWORD` 改掉），在里面登录 Grok。登录保存在卷 `grok-browser-profile` 里。外层每个人一个标签页：外面写下的话送进自己的那一页，网页上的回复再实时传回来。别人看不到这一页。同一时间只操作一个标签页。
-
-把 `GROK_BROWSER_VIEW` 设成你在局域网里打开画面的地址，例如 `http://192.168.5.1:6080/vnc.html`，席主页面上才会出现正确链接。6080 不要暴露到公网。
+浏览器层是同一台机器的 `6080` 端口：`http://192.168.5.1:6080/vnc.html`，密码默认 `seat-browser`。页面上的「浏览器层」链接也按你打开网页的地址生成，不会再跳到 `127.0.0.1`。
 
 | 变量 | 作用 |
 | --- | --- |
 | `BETTER_AUTH_SECRET` | 签发登录会话。每次启动必须是同一段，换了会把所有人踢下线。 |
-| `BETTER_AUTH_URL` | 你在浏览器地址栏里打开的完整地址，含协议和端口。用域名时写成 `https://你的域名`。 |
 | `VNC_PASSWORD` | 浏览器画面的密码，默认 `seat-browser`。 |
-| `GROK_BROWSER_VIEW` | 席主用来打开浏览器层的地址。 |
 | `PGLITE_DATA_DIR` | 容器里已设为 `/data`。聊天和账号存在卷 `private-seat-data`，重建容器不会丢。 |
 
 不设 `GROK_BROWSER_CDP` 时才使用 API key。`docker compose` 已经把浏览器层接上，不需要再贴 key。
