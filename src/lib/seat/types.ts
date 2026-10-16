@@ -10,6 +10,8 @@ export type SeatState = {
   globalUsed: number;
   globalCap: number;
   grok: GrokLink;
+  browser: boolean;
+  browserView: string | null;
 };
 
 export type ThreadRow = {

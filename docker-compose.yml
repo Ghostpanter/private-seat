@@ -1,4 +1,16 @@
 services:
+  grok-browser:
+    build:
+      context: ./browser
+    shm_size: "2gb"
+    ports:
+      - "6080:6080"
+    environment:
+      VNC_PASSWORD: ${VNC_PASSWORD:-seat-browser}
+    volumes:
+      - grok-browser-profile:/profile
+    restart: unless-stopped
+
   private-seat:
     build: .
     ports:
@@ -8,9 +20,14 @@ services:
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?set BETTER_AUTH_SECRET}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:8080}
       PGLITE_DATA_DIR: /data
+      GROK_BROWSER_CDP: http://grok-browser:9222
+      GROK_BROWSER_VIEW: ${GROK_BROWSER_VIEW:-http://127.0.0.1:6080/vnc.html}
     volumes:
       - private-seat-data:/data
+    depends_on:
+      - grok-browser
     restart: unless-stopped
 
 volumes:
   private-seat-data:
+  grok-browser-profile:

@@ -104,6 +104,8 @@ export async function ensureSeat(userId: string): Promise<SeatState> {
     globalUsed: asInt(globalRows[0]?.n),
     globalCap: GLOBAL_CAP,
     grok,
+    browser: Boolean(process.env.GROK_BROWSER_CDP?.trim()),
+    browserView: process.env.GROK_BROWSER_VIEW?.trim() || null,
   };
 }
 

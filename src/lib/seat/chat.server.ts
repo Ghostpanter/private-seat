@@ -40,8 +40,9 @@ export async function handleChatPost(request: Request): Promise<Response> {
     return jsonError("请先登录", 401);
   }
 
-  const apiKey = await resolveGrokKey();
-  if (!apiKey) return jsonError("还没有接入 Grok", 503);
+  const useBrowser = Boolean(process.env.GROK_BROWSER_CDP?.trim());
+  const apiKey = useBrowser ? "" : await resolveGrokKey();
+  if (!useBrowser && !apiKey) return jsonError("还没有接入 Grok", 503);
 
   let body: ChatBody;
   try {
@@ -82,6 +83,18 @@ export async function handleChatPost(request: Request): Promise<Response> {
 
       try {
         send({ type: "meta", threadId: prepared.threadId, title: prepared.title });
+        if (useBrowser) {
+          const { askBrowser } = await import("./browser.server");
+          await askBrowser(
+            userId,
+            content,
+            (piece) => {
+              full += piece;
+              send({ type: "delta", text: piece });
+            },
+            request.signal,
+          );
+        } else {
         const upstream = await fetch("https://api.x.ai/v1/chat/completions", {
           method: "POST",
           signal: request.signal,
@@ -136,6 +149,7 @@ export async function handleChatPost(request: Request): Promise<Response> {
               /* ignore a partial frame */
             }
           }
+        }
         }
 
         if (full.trim()) {

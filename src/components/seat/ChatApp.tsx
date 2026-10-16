@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Lock, Menu, Plus, Send, Settings, Trash2, X } from "lucide-react";
+import { Lock, Menu, Plus, Send, Settings, Square, Trash2, X } from "lucide-react";
 import { UserButton } from "@/lib/auth/gates";
 import { deleteThread, getMessages, getSeat, listThreads, redeemInvite } from "@/lib/seat/api";
+import { streamChat } from "@/lib/seat/stream";
 import type { MessageRow, SeatState, ThreadRow } from "@/lib/seat/types";
 import { InviteDialog } from "@/components/seat/InviteDialog";
 import { Markdown } from "@/components/seat/Markdown";
@@ -12,6 +13,7 @@ export function ChatApp() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [draft, setDraft] = useState("");
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -19,6 +21,7 @@ export function ChatApp() {
   const [code, setCode] = useState("");
   const [joining, setJoining] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   async function refreshSeat() {
     const next = await getSeat();
@@ -64,9 +67,11 @@ export function ChatApp() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [messages]);
+  }, [messages, busy]);
 
   function selectThread(id: string | null) {
+    abortRef.current?.abort();
+    setBusy(false);
     setError(null);
     setActiveId(id);
     if (!id) setMessages([]);
@@ -94,21 +99,55 @@ export function ChatApp() {
     }
   }
 
-  function send() {
+  async function send() {
     const content = draft.trim();
-    if (!content || !seat) return;
-    const mark = seat.name.trim() || "未署名";
-    const prompt = `【${mark}】\n${content}`;
-    const url = `https://grok.com/?q=${encodeURIComponent(prompt)}`;
-    const opened = window.open(url, "_blank", "noopener,noreferrer");
-    if (!opened) {
-      setError("浏览器拦住了新窗口。允许弹窗后，这句话会打开 Grok 网页。");
-      return;
-    }
+    if (!content || busy || !seat) return;
     setError(null);
     setDraft("");
+    setBusy(true);
     const localUser: MessageRow = { id: `local-${crypto.randomUUID()}`, role: "user", content };
-    setMessages((current) => [...current, localUser]);
+    const localAssistant: MessageRow = { id: "pending", role: "assistant", content: "" };
+    setMessages((current) => [...current, localUser, localAssistant]);
+    const controller = new AbortController();
+    abortRef.current = controller;
+    let threadId = activeId;
+    try {
+      await streamChat(
+        { threadId, content },
+        (event) => {
+          if (event.type === "meta") {
+            threadId = event.threadId;
+            setActiveId(event.threadId);
+            setThreads((current) => {
+              const rest = current.filter((item) => item.id !== event.threadId);
+              return [{ id: event.threadId, title: event.title, updatedAt: new Date().toISOString() }, ...rest];
+            });
+          } else if (event.type === "delta") {
+            setMessages((current) =>
+              current.map((item) =>
+                item.id === "pending" ? { ...item, content: item.content + event.text } : item,
+              ),
+            );
+          } else if (event.type === "error") {
+            setError(event.error);
+          }
+        },
+        controller.signal,
+      );
+      if (threadId) {
+        const rows = await getMessages({ data: { threadId } });
+        if (rows.length) setMessages(rows);
+        setThreads(await listThreads());
+        setSeat(await getSeat());
+      }
+    } catch (err) {
+      if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setError(err instanceof Error ? err.message : "发送失败");
+      }
+    } finally {
+      setBusy(false);
+      abortRef.current = null;
+    }
   }
 
   async function remove(id: string) {
@@ -278,9 +317,25 @@ export function ChatApp() {
           <h1 className="min-w-0 flex-1 truncate text-sm">{active?.title ?? "新的聊天"}</h1>
           <span className="pr-2 text-xs text-[#8e8ea0]">grok</span>
         </header>
-        <p className="px-4 pb-2 text-sm text-[#acacbe]">
-          发送后会打开 Grok 网页，内容前面带有你的标记「{seat.name.trim() || "未署名"}」。不走 API key。
-        </p>
+        {seat.browser ? (
+          <p className="px-4 pb-2 text-sm text-[#acacbe]">
+            {seat.role === "host" ? (
+              <>
+                外层按人分标签页。先打开
+                {seat.browserView ? (
+                  <a className="mx-1 underline" href={seat.browserView} target="_blank" rel="noreferrer">
+                    浏览器层
+                  </a>
+                ) : (
+                  " 6080 端口的浏览器层 "
+                )}
+                登录 Grok，登录会留在容器里。
+              </>
+            ) : (
+              "你的话只进自己的标签页，回复从那一页实时传回来。"
+            )}
+          </p>
+        ) : null}
 
         <div className="flex-1 overflow-y-auto">
           {messages.length === 0 ? (
@@ -338,19 +393,27 @@ export function ChatApp() {
               }}
               rows={1}
               maxLength={2000}
-              placeholder="写一句，送到 Grok 网页"
+              placeholder="输入消息，Enter 发送"
               className="max-h-40 min-h-8 w-full resize-none bg-transparent py-1 text-sm outline-none"
             />
-            <button type="submit" disabled={!draft.trim()} className="seat-send" aria-label="发送到 Grok 网页">
-              <Send className="size-4" />
-            </button>
+            {busy ? (
+              <button type="button" onClick={() => abortRef.current?.abort()} className="seat-send" aria-label="停止">
+                <Square className="size-3.5" />
+              </button>
+            ) : (
+              <button type="submit" disabled={!draft.trim()} className="seat-send" aria-label="发送">
+                <Send className="size-4" />
+              </button>
+            )}
           </form>
           {error ? (
             <p role="alert" className="mx-auto mt-2 max-w-3xl text-center text-sm text-[#fca5a5]">
               {error}
             </p>
           ) : null}
-          <p className="mt-2 text-center text-xs text-[#8e8ea0]">这句话只在你自己的浏览器里打开 Grok 网页，不会调用接口。</p>
+          <p className="mt-2 text-center text-xs text-[#8e8ea0]">
+            {seat.browser ? "同一时间只驱动一个标签页，别人的内容不会出现在你这边。" : `今天还剩 ${remaining} 条。内容只留在你的账号里。`}
+          </p>
         </div>
       </section>
 
